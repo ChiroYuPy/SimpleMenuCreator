@@ -5,6 +5,7 @@ class Button:
     def __init__(self, text, rect, command=None, font_size=None,
                  default_top_color=None, hover_top_color=None,
                  bottom_color=None, text_color=None):
+        self.clicked = False
         x, y, w, h = rect
         pos = x, y
         x = pos[0] - w / 2
@@ -48,15 +49,20 @@ class Button:
 
     def is_clicked(self):
         if self.is_hovered():
-            if pygame.mouse.get_pressed()[0]:
+            mouse_button = pygame.mouse.get_pressed()[0]
+
+            if mouse_button and not self.clicked:
+                # Le bouton de la souris est enfoncé, mais nous n'avons pas encore cliqué
                 self.dyn_elevation = 0
+                self.clicked = True
+
+            elif not mouse_button and self.clicked:
+                # Le bouton de la souris a été relâché après avoir été cliqué
+                self.dyn_elevation = self.elevation
                 if self.command:
                     self.command()
-                self.pressed = True
-            else:
-                self.dyn_elevation = self.elevation
-                if self.pressed:
-                    self.pressed = False
+                self.clicked = False
+
         else:
             self.dyn_elevation = self.elevation
-
+            self.clicked = False

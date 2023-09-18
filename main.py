@@ -1,11 +1,10 @@
-import random
-
-import pygame
 import sys
+import numpy as np
+import pygame
+
 from src.button import Button
 from src.config import *
 from src.particle import ParticleEmitter
-import numpy as np
 
 # Initialisation de Pygame
 pygame.init()
@@ -25,8 +24,10 @@ class BaseMenu:
         self.buttons = []
         self.particle_emitter = None
 
-    def init_particle_emitter(self, particle_type, num_particles, particle_color1, particle_color2, particle_size, particle_speed):
-        self.particle_emitter = ParticleEmitter(self.screen, particle_type, num_particles, particle_color1, particle_color2,
+    def init_particle_emitter(self, particle_type, num_particles, particle_color1, particle_color2, particle_size,
+                              particle_speed):
+        self.particle_emitter = ParticleEmitter(self.screen, particle_type, num_particles, particle_color1,
+                                                particle_color2,
                                                 particle_size, particle_speed)
 
     def handle_click(self):
@@ -91,95 +92,201 @@ class OptionsMenu(BaseMenu):
 
         self.particle_emitter.start_snowfall()
 
+# Classe du menu de Conway
 class ConwayMenu(BaseMenu):
     def __init__(self, screen):
         super().__init__(screen)
 
-        self.back_button = Button("Retour au Menu Principal", (WIDTH / 2, 500, 200, 50), switch_to_main_menu)
+        self.selected_preset_name = None
+        self.back_button = Button("Retour", (WIDTH / 2, HEIGHT * 0.9, 200, 50), switch_to_main_menu)
+        self.start_button = Button("Démarrer", (WIDTH * 0.76, HEIGHT * 0.2, 100, 50), self.start_conway)
+        self.stop_button = Button("Arrêter", (WIDTH * 0.76, HEIGHT * 0.3, 100, 50), self.stop_conway)
+        self.clear_button = Button("Effacer tout", (WIDTH * 0.76, HEIGHT * 0.4, 100, 50), self.clear_grid)
+        self.randomize_button = Button("Randomiser", (WIDTH * 0.76, HEIGHT * 0.5, 100, 50), self.randomize_grid)
+        self.buttons = [self.back_button, self.start_button, self.stop_button, self.clear_button, self.randomize_button]
 
-        # Bouton pour démarrer/arrêter la simulation
-        self.start_stop_button = Button("Démarrer", (WIDTH / 2, 50, 100, 40), self.toggle_simulation)
+        # Liste de boutons pour les presets
+        self.preset_buttons = [
+            Button("Preset 1", (WIDTH * 0.76, HEIGHT * 0.6, 100, 50), self.select_preset_1),
+            Button("Preset 2", (WIDTH * 0.76, HEIGHT * 0.7, 100, 50), self.select_preset_2),
+            # Ajoutez des boutons pour d'autres presets ici
+        ]
+        self.buttons.extend(self.preset_buttons)  # Ajoutez les boutons de presets à la liste principale de boutons
 
-        self.buttons = [self.back_button, self.start_stop_button]
+        # Surface (viewport)
+        self.viewport_width = 512
+        self.viewport_height = 512
+        self.viewport = pygame.Surface((self.viewport_width, self.viewport_height))
+        self.viewport_rect = self.viewport.get_rect(center=(WIDTH / 2, HEIGHT / 2))  # Ajuster le centre
 
-        # Dimensions de la grille
-        self.grid_width = 16
-        self.grid_height = 16
-        self.cell_size = 16
+        # Dimensions de la grille du jeu de la vie
+        self.grid_width = 64
+        self.grid_height = 64
+        self.cell_size = self.viewport_width // self.grid_width
+        self.grid = np.random.randint(2, size=(self.grid_width, self.grid_height))
+        self.running_conway = False
 
-        # Position de départ pour centrer la grille
-        self.grid_x = (WIDTH - self.grid_width * self.cell_size) // 2
-        self.grid_y = (HEIGHT - self.grid_height * self.cell_size) // 2
+        self.presets = [
+            [(0, 0), (1, 0), (2, 0)],
+            [(0, 0), (0, 1), (1, 1)],
+            # Ajoutez d'autres presets ici
+        ]
 
-        # Initialisez la grille avec des cellules aléatoires
-        self.grid = np.random.choice([0, 1], size=(self.grid_width, self.grid_height))
+        self.selected_preset = None  # Le preset sélectionné
+        self.preview_cells = []  # Les cellules de l'aperçu
+        self.selected_cell_x = 0  # Ajout de l'initialisation de selected_cell_x
+        self.selected_cell_y = 0  # Ajout de l'initialisation de selected_cell_y
 
-        # État de la simulation
-        self.running = False
+    def draw_viewport(self, surface, rect):
+        # Dessinez la grille du jeu de la vie de Conway au centre du viewport
+        viewport_x = (WIDTH - self.viewport_width) / 2
+        viewport_y = (HEIGHT - self.viewport_height) / 2
 
-        # Intervalle de mise à jour de la simulation (en millisecondes)
-        self.update_interval = 500  # Par défaut, une mise à jour toutes les 500 ms
-        self.last_update_time = pygame.time.get_ticks()
+        # Effacez le viewport
+        self.viewport.fill((0, 0, 0))
 
-    def toggle_simulation(self):
-        # Inversez l'état de la simulation (démarrer/arrêter)
-        self.running = not self.running
-        self.start_stop_button.text = "Arrêter" if self.running else "Démarrer"
-
-    def update_conway(self):
-        if self.running:
-            current_time = pygame.time.get_ticks()
-            if current_time - self.last_update_time >= self.update_interval:
-                self.last_update_time = current_time
-
-                new_grid = np.copy(self.grid)
-
-                for x in range(self.grid_width):
-                    for y in range(self.grid_height):
-                        # Comptez le nombre de voisins vivants
-                        neighbors = np.sum(self.grid[max(0, x - 1):min(self.grid_width, x + 2),
-                                                     max(0, y - 1):min(self.grid_height, y + 2)]) - self.grid[x, y]
-
-                        # Appliquez les règles de Conway
-                        if self.grid[x, y] == 1 and (neighbors < 2 or neighbors > 3):
-                            new_grid[x, y] = 0
-                        elif self.grid[x, y] == 0 and neighbors == 3:
-                            new_grid[x, y] = 1
-
-                self.grid = new_grid
-
-    def draw(self):
-        super().draw()
-
-        # Dessinez la grille du jeu de Conway au centre de l'écran
+        # Dessinez la grille avec des cercles
         for x in range(self.grid_width):
             for y in range(self.grid_height):
-                color = (0, 0, 0) if self.grid[x, y] == 0 else (255, 255, 255)
-                cell_rect = pygame.Rect(self.grid_x + x * self.cell_size, self.grid_y + y * self.cell_size, self.cell_size, self.cell_size)
-                pygame.draw.rect(self.screen, color, cell_rect)
+                if self.grid[x, y] == 1:
+                    cell_x = x * self.cell_size + self.cell_size // 2
+                    cell_y = y * self.cell_size + self.cell_size // 2
+                    cell_radius = self.cell_size // 2
+                    pygame.draw.circle(self.viewport, (255, 255, 255), (cell_x, cell_y), cell_radius)
 
-    def handle_click(self):
-        super().handle_click()
+        # Copiez le viewport dans la surface principale
+        surface.blit(self.viewport, (viewport_x, viewport_y))
 
-        # Réinitialisez la grille avec des cellules aléatoires lorsqu'un bouton est cliqué
-        self.grid = np.random.choice([0, 1], size=(self.grid_width, self.grid_height))
+    def start_conway(self):
+        self.running_conway = True
 
-    def handle_keydown(self, key):
-        if key == pygame.K_SPACE:
-            self.toggle_simulation()
+    def stop_conway(self):
+        self.running_conway = False
 
-    def update(self):
-        super().update()
+    def clear_grid(self):
+        # Mettre toutes les cellules à mortes (état 0)
+        self.grid = np.zeros((self.grid_width, self.grid_height), dtype=int)
 
-        # Mettez à jour la simulation du jeu de Conway
-        self.update_conway()
+    def randomize_grid(self):
+        # Randomiser les cellules
+        self.grid = np.random.randint(2, size=(self.grid_width, self.grid_height))
 
-        # Calculer les FPS
-        fps = int(clock.get_fps())
+    def select_preset_1(self):
+        self.selected_preset = self.presets[0]
+        self.selected_preset_name = "Preset 1"
+        self.draw_preset_preview()
 
-        # Afficher les FPS en haut à gauche
-        fps_text = font.render(f"FPS: {fps}", True, (255, 255, 255))
-        self.screen.blit(fps_text, (10, 10))
+    def select_preset_2(self):
+        self.selected_preset = self.presets[1]
+        self.selected_preset_name = "Preset 2"
+        self.draw_preset_preview()
+
+    def update_conway_grid(self):
+        if self.running_conway:
+            new_grid = np.copy(self.grid)
+
+            for x in range(self.grid_width):
+                for y in range(self.grid_height):
+                    # Règles du jeu de la vie de Conway
+                    neighbors = self.get_neighbors(x, y)
+                    if self.grid[x, y] == 1:
+                        if neighbors < 2 or neighbors > 3:
+                            new_grid[x, y] = 0
+                    else:
+                        if neighbors == 3:
+                            new_grid[x, y] = 1
+
+            self.grid = new_grid
+
+    def get_neighbors(self, x, y):
+        neighbors = 0
+        for dx in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                if dx == 0 and dy == 0:
+                    continue
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < self.grid_width and 0 <= ny < self.grid_height:
+                    neighbors += self.grid[nx, ny]
+        return neighbors
+
+    def handle_mouse_click(self, x, y):
+        # Convertissez les coordonnées de la souris en coordonnées de la grille
+        grid_x = (x - self.viewport_rect.left) // self.cell_size
+        grid_y = (y - self.viewport_rect.top) // self.cell_size
+
+        # Vérifiez si les coordonnées sont valides
+        if 0 <= grid_x < self.grid_width and 0 <= grid_y < self.grid_height:
+            # Inversez l'état de la cellule (vivante ou morte)
+            self.grid[grid_x, grid_y] = 1 - self.grid[grid_x, grid_y]
+
+            # Gardez en mémoire la cellule sélectionnée
+            self.selected_cell_x, self.selected_cell_y = grid_x, grid_y
+
+    def handle_mouse_motion(self, x, y):
+        self.draw_preview(x, y)
+
+    def place_preset(self, x, y):
+        if self.selected_preset:
+            # Calculez l'offset en fonction de la cellule sélectionnée
+            offset_x, offset_y = x - self.selected_cell_x, y - self.selected_cell_y
+
+            # Vérifiez si le preset peut être placé entièrement à l'intérieur de la grille
+            preset_fits = all(0 <= cx + offset_x < self.grid_width and 0 <= cy + offset_y < self.grid_height
+                              for cx, cy in self.selected_preset)
+
+            if preset_fits:
+                # Placez le preset dans la grille
+                for cx, cy in self.selected_preset:
+                    self.grid[cx + offset_x, cy + offset_y] = 1
+
+    def draw_preset_preview(self):
+        if self.selected_preset:
+            # Effacez l'aperçu précédent
+            for cx, cy in self.preview_cells:
+                pygame.draw.rect(self.viewport, (0, 0, 0),
+                                 (cx * self.cell_size, cy * self.cell_size, self.cell_size, self.cell_size))
+
+            # Calculez l'offset en fonction de la position de la souris
+            offset_x, offset_y = pygame.mouse.get_pos()[0] - self.viewport_rect.left, pygame.mouse.get_pos()[
+                1] - self.viewport_rect.top
+
+            # Créez un nouvel aperçu
+            self.preview_cells = [(cx + offset_x // self.cell_size, cy + offset_y // self.cell_size) for cx, cy in
+                                  self.selected_preset]
+
+            # Dessinez l'aperçu en gris clair
+            for cx, cy in self.preview_cells:
+                if 0 <= cx < self.grid_width and 0 <= cy < self.grid_height:
+                    cell_x = cx * self.cell_size
+                    cell_y = cy * self.cell_size
+                    pygame.draw.rect(self.viewport, (200, 200, 200), (cell_x, cell_y, self.cell_size, self.cell_size),
+                                     1)
+
+    def draw_selected_preset(self):
+        if self.selected_preset:
+            preset_name = f"Preset {self.presets.index(self.selected_preset) + 1}"
+            text = font.render(preset_name, True, (255, 255, 255))
+            screen.blit(text, (10, 50))
+
+    def draw_preview(self, x, y):
+        if self.selected_preset:
+            # Effacez l'aperçu précédent
+            for cx, cy in self.preview_cells:
+                pygame.draw.rect(self.viewport, (0, 0, 0), (cx * self.cell_size, cy * self.cell_size, self.cell_size, self.cell_size))
+
+            # Calculez l'offset en fonction de la position de la souris
+            offset_x, offset_y = x - self.selected_cell_x, y - self.selected_cell_y
+
+            # Créez un nouvel aperçu
+            self.preview_cells = [(cx + offset_x, cy + offset_y) for cx, cy in self.selected_preset]
+
+            # Dessinez l'aperçu en gris clair
+            for cx, cy in self.preview_cells:
+                if 0 <= cx < self.grid_width and 0 <= cy < self.grid_height:
+                    cell_x = cx * self.cell_size
+                    cell_y = cy * self.cell_size
+                    pygame.draw.rect(self.viewport, (200, 200, 200), (cell_x, cell_y, self.cell_size, self.cell_size), 1)
+
 
 # Fonction pour passer d'un menu à un autre
 def switch_to_menu(new_menu):
@@ -219,8 +326,7 @@ switching_menu = None
 alpha = 0
 fade_speed = 30
 
-
-# Boucle de jeu principale
+# Boucle principale du jeu
 running = True
 while running:
     for event in pygame.event.get():
@@ -228,7 +334,13 @@ while running:
             running = False
         if event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:  # Clic gauche
+                if isinstance(current_menu, ConwayMenu):
+                    # Appel de la méthode pour gérer le clic de souris
+                    current_menu.handle_mouse_click(event.pos[0], event.pos[1])
                 current_menu.handle_click()
+        if event.type == pygame.MOUSEMOTION:
+            if isinstance(current_menu, ConwayMenu):
+                current_menu.handle_mouse_motion(event.pos[0], event.pos[1])
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 fade_out(screen)
@@ -249,6 +361,10 @@ while running:
     # Calculer les FPS
     fps = int(clock.get_fps())
 
+    # Mettre à jour la simulation du jeu de la vie de Conway si elle est en cours
+    if isinstance(current_menu, ConwayMenu) and current_menu.running_conway:
+        current_menu.update_conway_grid()
+
     # Afficher le menu actuellement visible
     x, y = pygame.mouse.get_pos()
     dx = (x - WIDTH / 2) / 10
@@ -268,7 +384,8 @@ while running:
 
     # Appeler la méthode draw de ConwayMenu si le menu actuel est ConwayMenu
     if isinstance(current_menu, ConwayMenu):
-        current_menu.draw()
+        current_menu.draw()  # Changez ceci pour appeler draw() au lieu de update()
+        current_menu.draw_viewport(screen, current_menu.viewport_rect)  # Dessiner le viewport
 
     # Dessiner les boutons
     for button in current_menu.buttons:
@@ -278,6 +395,11 @@ while running:
     fps_text = font.render(f"FPS: {fps}", True, (255, 255, 255))
     screen.blit(fps_text, (10, 10))
 
+    # Afficher le nom du preset actuellement sélectionné
+    if isinstance(current_menu, ConwayMenu) and current_menu.selected_preset:
+        preset_text = font.render(f"Preset: {current_menu.selected_preset_name}", True, (255, 255, 255))
+        screen.blit(preset_text, (10, 50))  # Ajustez la position du texte selon vos préférences
+
     # Dessiner l'effet de fondu
     if alpha > 0:
         fade_surface = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
@@ -286,6 +408,3 @@ while running:
 
     pygame.display.flip()
     clock.tick(FPS)
-
-pygame.quit()
-sys.exit()

@@ -3,7 +3,7 @@ import random
 
 import pygame
 
-from src.config import *
+from src.Config import *
 
 
 class ParticleEmitter:

@@ -2,9 +2,9 @@ import sys
 import numpy as np
 import pygame
 
-from src.button import Button
-from src.config import *
-from src.particle import ParticleEmitter
+from src.Config import *
+from src.Button import Button
+from src.Particle import ParticleEmitter
 
 # Initialisation de Pygame
 pygame.init()
@@ -15,6 +15,7 @@ pygame.display.set_caption(app_name)
 clock = pygame.time.Clock()
 
 font = pygame.font.Font(None, 36)
+
 
 # Classe de base pour les menus
 class BaseMenu:
@@ -49,16 +50,20 @@ class BaseMenu:
         for button in self.buttons:
             button.draw(self.screen)
 
+
 # Classe du menu principal
 def quit_game():
     pygame.quit()
     sys.exit()
 
+
 def switch_to_options():
     switch_to_menu(options_menu)
 
+
 def switch_to_conway():
     switch_to_menu(conway_menu)
+
 
 class MainMenu(BaseMenu):
     def __init__(self, screen):
@@ -75,9 +80,11 @@ class MainMenu(BaseMenu):
 
         self.particle_emitter.start_snowfall()
 
+
 # Classe du menu des options
 def switch_to_main_menu():
     switch_to_menu(main_menu)
+
 
 class OptionsMenu(BaseMenu):
     def __init__(self, screen):
@@ -91,6 +98,7 @@ class OptionsMenu(BaseMenu):
                                    particle_color2=(0, 0, 0), particle_size=8, particle_speed=5)
 
         self.particle_emitter.start_snowfall()
+
 
 # Classe du menu de Conway
 class ConwayMenu(BaseMenu):
@@ -109,7 +117,9 @@ class ConwayMenu(BaseMenu):
         self.preset_buttons = [
             Button("Preset 1", (WIDTH * 0.76, HEIGHT * 0.6, 100, 50), self.select_preset_1),
             Button("Preset 2", (WIDTH * 0.76, HEIGHT * 0.7, 100, 50), self.select_preset_2),
-            # Ajoutez des boutons pour d'autres presets ici
+            Button("Preset 3", (WIDTH * 0.76, HEIGHT * 0.8, 100, 50), self.select_preset_3),
+            Button("Preset 4", (WIDTH * 0.85, HEIGHT * 0.6, 100, 50), self.select_preset_4),
+            Button("Preset 5", (WIDTH * 0.85, HEIGHT * 0.7, 100, 50), self.select_preset_5),
         ]
         self.buttons.extend(self.preset_buttons)  # Ajoutez les boutons de presets à la liste principale de boutons
 
@@ -127,9 +137,10 @@ class ConwayMenu(BaseMenu):
         self.running_conway = False
 
         self.presets = [
-            [(0, 0), (1, 0), (2, 0)],
-            [(0, 0), (0, 1), (1, 1)],
-            # Ajoutez d'autres presets ici
+            [(-1, 0), (0, 0), (1, 0)],
+            [(0, 1), (0, 0), (1, 0)],
+            [(0, -1), (0, 0), (0, 1), (1, 1), (-1, 1)],
+            [(-2, -1), (-2, 0), (-2, 1), (-1, -2), (-1, 2), (0, -2), (0, 2), (1, -2), (1, 2), (2, -1), (2, 0), (2, 1)],
         ]
 
         self.selected_preset = None  # Le preset sélectionné
@@ -174,12 +185,36 @@ class ConwayMenu(BaseMenu):
     def select_preset_1(self):
         self.selected_preset = self.presets[0]
         self.selected_preset_name = "Preset 1"
-        self.draw_preset_preview()
 
     def select_preset_2(self):
         self.selected_preset = self.presets[1]
         self.selected_preset_name = "Preset 2"
-        self.draw_preset_preview()
+
+    def select_preset_3(self):
+        self.selected_preset = self.presets[2]
+        self.selected_preset_name = "Preset 3"
+
+    def select_preset_4(self):
+        self.selected_preset = self.presets[3]
+        self.selected_preset_name = "Preset 4"
+
+    def select_preset_5(self):
+        self.selected_preset = self.presets[4]
+        self.selected_preset_name = "Preset 5"
+
+    def draw_preset_preview(self):
+        if self.selected_preset:
+            preview_grid_size = 16
+            cell_size = self.viewport_width // preview_grid_size
+            grid_x = WIDTH*0.82
+            grid_y = HEIGHT/2
+            for cx, cy in self.selected_preset:
+                # Calculez les coordonnées du centre du cercle
+                circle_x = grid_x + cx * cell_size/2
+                circle_y = grid_y + cy * cell_size/2
+                circle_radius = cell_size // 4
+                pygame.draw.circle(self.screen, (255, 255, 255), (circle_x, circle_y), circle_radius)
+
 
     def update_conway_grid(self):
         if self.running_conway:
@@ -219,16 +254,13 @@ class ConwayMenu(BaseMenu):
             # Inversez l'état de la cellule (vivante ou morte)
             self.grid[grid_x, grid_y] = 1 - self.grid[grid_x, grid_y]
 
-            # Gardez en mémoire la cellule sélectionnée
-            self.selected_cell_x, self.selected_cell_y = grid_x, grid_y
-
-    def handle_mouse_motion(self, x, y):
-        self.draw_preview(x, y)
+            # Placez le preset de manière à ce que la cellule (0, 0) du preset corresponde à la cellule sélectionnée
+            self.place_preset(grid_x, grid_y)
 
     def place_preset(self, x, y):
         if self.selected_preset:
             # Calculez l'offset en fonction de la cellule sélectionnée
-            offset_x, offset_y = x - self.selected_cell_x, y - self.selected_cell_y
+            offset_x, offset_y = x - 0, y - 0  # Ajustez ces valeurs en fonction de la cellule (0, 0) du preset
 
             # Vérifiez si le preset peut être placé entièrement à l'intérieur de la grille
             preset_fits = all(0 <= cx + offset_x < self.grid_width and 0 <= cy + offset_y < self.grid_height
@@ -239,28 +271,8 @@ class ConwayMenu(BaseMenu):
                 for cx, cy in self.selected_preset:
                     self.grid[cx + offset_x, cy + offset_y] = 1
 
-    def draw_preset_preview(self):
-        if self.selected_preset:
-            # Effacez l'aperçu précédent
-            for cx, cy in self.preview_cells:
-                pygame.draw.rect(self.viewport, (0, 0, 0),
-                                 (cx * self.cell_size, cy * self.cell_size, self.cell_size, self.cell_size))
-
-            # Calculez l'offset en fonction de la position de la souris
-            offset_x, offset_y = pygame.mouse.get_pos()[0] - self.viewport_rect.left, pygame.mouse.get_pos()[
-                1] - self.viewport_rect.top
-
-            # Créez un nouvel aperçu
-            self.preview_cells = [(cx + offset_x // self.cell_size, cy + offset_y // self.cell_size) for cx, cy in
-                                  self.selected_preset]
-
-            # Dessinez l'aperçu en gris clair
-            for cx, cy in self.preview_cells:
-                if 0 <= cx < self.grid_width and 0 <= cy < self.grid_height:
-                    cell_x = cx * self.cell_size
-                    cell_y = cy * self.cell_size
-                    pygame.draw.rect(self.viewport, (200, 200, 200), (cell_x, cell_y, self.cell_size, self.cell_size),
-                                     1)
+    def handle_mouse_motion(self, x, y):
+        self.draw_preview(x, y)
 
     def draw_selected_preset(self):
         if self.selected_preset:
@@ -272,7 +284,8 @@ class ConwayMenu(BaseMenu):
         if self.selected_preset:
             # Effacez l'aperçu précédent
             for cx, cy in self.preview_cells:
-                pygame.draw.rect(self.viewport, (0, 0, 0), (cx * self.cell_size, cy * self.cell_size, self.cell_size, self.cell_size))
+                pygame.draw.rect(self.viewport, (0, 0, 0),
+                                 (cx * self.cell_size, cy * self.cell_size, self.cell_size, self.cell_size))
 
             # Calculez l'offset en fonction de la position de la souris
             offset_x, offset_y = x - self.selected_cell_x, y - self.selected_cell_y
@@ -285,7 +298,8 @@ class ConwayMenu(BaseMenu):
                 if 0 <= cx < self.grid_width and 0 <= cy < self.grid_height:
                     cell_x = cx * self.cell_size
                     cell_y = cy * self.cell_size
-                    pygame.draw.rect(self.viewport, (200, 200, 200), (cell_x, cell_y, self.cell_size, self.cell_size), 1)
+                    pygame.draw.rect(self.viewport, (200, 200, 200), (cell_x, cell_y, self.cell_size, self.cell_size),
+                                     1)
 
 
 # Fonction pour passer d'un menu à un autre
@@ -382,10 +396,19 @@ while running:
         current_menu.particle_emitter.update()
         current_menu.particle_emitter.draw()
 
-    # Appeler la méthode draw de ConwayMenu si le menu actuel est ConwayMenu
+    # Dessiner le viewport
     if isinstance(current_menu, ConwayMenu):
-        current_menu.draw()  # Changez ceci pour appeler draw() au lieu de update()
-        current_menu.draw_viewport(screen, current_menu.viewport_rect)  # Dessiner le viewport
+        current_menu.draw_viewport(screen, current_menu.viewport_rect)
+
+        # Dessiner le contenu à côté du viewport
+        # Vous pouvez ajouter du code ici pour dessiner ce que vous voulez à côté du viewport
+        # Par exemple, pour afficher le nom du preset actuellement sélectionné :
+        preset_text = font.render(f"Preset: {current_menu.selected_preset_name}", True, (255, 255, 255))
+        screen.blit(preset_text, (10, 50))  # Ajustez la position du texte selon vos préférences
+
+        # Dessiner les boutons du preset sélectionné
+        for button in current_menu.preset_buttons:
+            button.draw(screen)
 
     # Dessiner les boutons
     for button in current_menu.buttons:
@@ -399,6 +422,14 @@ while running:
     if isinstance(current_menu, ConwayMenu) and current_menu.selected_preset:
         preset_text = font.render(f"Preset: {current_menu.selected_preset_name}", True, (255, 255, 255))
         screen.blit(preset_text, (10, 50))  # Ajustez la position du texte selon vos préférences
+
+    # Dessiner les boutons du menu
+    for button in current_menu.buttons:
+        button.draw(screen)
+
+    # Dessiner l'aperçu du preset sélectionné
+    if isinstance(current_menu, ConwayMenu) and current_menu.selected_preset:
+        current_menu.draw_preset_preview()
 
     # Dessiner l'effet de fondu
     if alpha > 0:

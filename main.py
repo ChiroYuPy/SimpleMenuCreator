@@ -5,6 +5,7 @@ import pygame
 from src.Config import *
 from src.Button import Button
 from src.Particle import ParticleEmitter
+from src.Slider import Slider
 
 # Initialisation de Pygame
 pygame.init()
@@ -17,7 +18,6 @@ clock = pygame.time.Clock()
 font = pygame.font.Font(None, 36)
 
 
-# Classe de base pour les menus
 class BaseMenu:
     def __init__(self, screen):
         self.screen = screen
@@ -27,7 +27,7 @@ class BaseMenu:
 
     def init_particle_emitter(self, particle_type, num_particles, particle_color1, particle_color2, particle_size,
                               particle_speed):
-        self.particle_emitter = ParticleEmitter(self.screen, particle_type, num_particles, particle_color1,
+        self.particle_emitter = ParticleEmitter(self.screen, num_particles, particle_color1,
                                                 particle_color2,
                                                 particle_size, particle_speed)
 
@@ -51,8 +51,10 @@ class BaseMenu:
             button.draw(self.screen)
 
 
+
 # Classe du menu principal
 def quit_game():
+    fade_out(screen)
     pygame.quit()
     sys.exit()
 
@@ -105,6 +107,7 @@ class ConwayMenu(BaseMenu):
     def __init__(self, screen):
         super().__init__(screen)
 
+        self.last_update = 0
         self.selected_preset_name = None
         self.back_button = Button("Retour", (WIDTH / 2, HEIGHT * 0.9, 200, 50), switch_to_main_menu)
         self.start_button = Button("Démarrer", (WIDTH * 0.76, HEIGHT * 0.2, 100, 50), self.start_conway)
@@ -115,13 +118,15 @@ class ConwayMenu(BaseMenu):
 
         # Liste de boutons pour les presets
         self.preset_buttons = [
-            Button("Preset 1", (WIDTH * 0.76, HEIGHT * 0.6, 100, 50), self.select_preset_1),
-            Button("Preset 2", (WIDTH * 0.76, HEIGHT * 0.7, 100, 50), self.select_preset_2),
-            Button("Preset 3", (WIDTH * 0.76, HEIGHT * 0.8, 100, 50), self.select_preset_3),
-            Button("Preset 4", (WIDTH * 0.85, HEIGHT * 0.6, 100, 50), self.select_preset_4),
-            Button("Preset 5", (WIDTH * 0.85, HEIGHT * 0.7, 100, 50), self.select_preset_5),
+            Button("Preset 1", (WIDTH * 0.76, HEIGHT * 0.6, 100, 50), lambda: self.select_preset(0)),
+            Button("Preset 2", (WIDTH * 0.76, HEIGHT * 0.7, 100, 50), lambda: self.select_preset(1)),
+            Button("Preset 3", (WIDTH * 0.76, HEIGHT * 0.8, 100, 50), lambda: self.select_preset(2)),
+            Button("Preset 4", (WIDTH * 0.85, HEIGHT * 0.6, 100, 50), lambda: self.select_preset(3)),
+            Button("Preset 5", (WIDTH * 0.85, HEIGHT * 0.7, 100, 50), lambda: self.select_preset(4)),
         ]
-        self.buttons.extend(self.preset_buttons)  # Ajoutez les boutons de presets à la liste principale de boutons
+        self.buttons.extend(self.preset_buttons)
+
+        self.speed_slider = Slider(screen, WIDTH*0.5, HEIGHT * 0.08, 320, 20, 1, 5, default_value=1, segments=4)
 
         # Surface (viewport)
         self.viewport_width = 512
@@ -141,6 +146,10 @@ class ConwayMenu(BaseMenu):
             [(0, 1), (0, 0), (1, 0)],
             [(0, -1), (0, 0), (0, 1), (1, 1), (-1, 1)],
             [(-2, -1), (-2, 0), (-2, 1), (-1, -2), (-1, 2), (0, -2), (0, 2), (1, -2), (1, 2), (2, -1), (2, 0), (2, 1)],
+            [(0, 0), (-4, 1), (-4, 0), (-4, -1), (-3, 2), (-3, -2), (-2, 3), (-2, -3), (-1, 3), (-1, -3), (1, 2),
+             (1, -2), (2, 1), (2, 0), (2, -1), (3, 0), (6, 1), (6, 2), (6, 3), (7, 1), (7, 2), (7, 3), (8, 0), (8, 4),
+             (10, -1), (10, 5), (12, -1), (12, 5), (12, -2), (12, 6), (22, 2), (22, 3), (23, 2), (23, 3), (-13, 0),
+             (-13, 1), (-14, 0), (-14, 1)]
         ]
 
         self.selected_preset = None  # Le preset sélectionné
@@ -182,47 +191,33 @@ class ConwayMenu(BaseMenu):
         # Randomiser les cellules
         self.grid = np.random.randint(2, size=(self.grid_width, self.grid_height))
 
-    def select_preset_1(self):
-        self.selected_preset = self.presets[0]
-        self.selected_preset_name = "Preset 1"
-
-    def select_preset_2(self):
-        self.selected_preset = self.presets[1]
-        self.selected_preset_name = "Preset 2"
-
-    def select_preset_3(self):
-        self.selected_preset = self.presets[2]
-        self.selected_preset_name = "Preset 3"
-
-    def select_preset_4(self):
-        self.selected_preset = self.presets[3]
-        self.selected_preset_name = "Preset 4"
-
-    def select_preset_5(self):
-        self.selected_preset = self.presets[4]
-        self.selected_preset_name = "Preset 5"
+    def select_preset(self, preset_index):
+        if 0 <= preset_index < len(self.presets):
+            self.selected_preset = self.presets[preset_index]
+            self.selected_preset_name = f"Preset {preset_index + 1}"
 
     def draw_preset_preview(self):
         if self.selected_preset:
-            preview_grid_size = 16
-            cell_size = self.viewport_width // preview_grid_size
-            grid_x = WIDTH*0.82
-            grid_y = HEIGHT/2
+            preview_grid_size = (
+            self.grid_width, self.grid_height)
+            cell_size = self.viewport_width // preview_grid_size[0]
+            grid_x = WIDTH * 0.2
+            grid_y = HEIGHT * 0.5
+
             for cx, cy in self.selected_preset:
-                # Calculez les coordonnées du centre du cercle
-                circle_x = grid_x + cx * cell_size/2
-                circle_y = grid_y + cy * cell_size/2
+                circle_x = grid_x + cx * cell_size / 2
+                circle_y = grid_y + cy * cell_size / 2
                 circle_radius = cell_size // 4
                 pygame.draw.circle(self.screen, (255, 255, 255), (circle_x, circle_y), circle_radius)
 
-
     def update_conway_grid(self):
-        if self.running_conway:
+        update_interval = int(1000 / self.speed_slider.get_value() ** 2)
+        if pygame.time.get_ticks() - self.last_update >= update_interval:
+            self.last_update = pygame.time.get_ticks()
             new_grid = np.copy(self.grid)
 
             for x in range(self.grid_width):
                 for y in range(self.grid_height):
-                    # Règles du jeu de la vie de Conway
                     neighbors = self.get_neighbors(x, y)
                     if self.grid[x, y] == 1:
                         if neighbors < 2 or neighbors > 3:
@@ -301,6 +296,20 @@ class ConwayMenu(BaseMenu):
                     pygame.draw.rect(self.viewport, (200, 200, 200), (cell_x, cell_y, self.cell_size, self.cell_size),
                                      1)
 
+    def draw(self):
+        # Code de dessin spécifique au menu de Conway
+        self.draw_viewport(self.screen, self.viewport_rect)
+        preset_text = font.render(f"Preset: {self.selected_preset_name}", True, (255, 255, 255))
+        self.screen.blit(preset_text, (10, 50))
+        self.draw_preset_preview()
+        self.speed_slider.update()
+        self.speed_slider.draw()
+
+        for button in self.buttons:
+            button.draw(self.screen)
+
+        squared_slider_text = font.render(f"I/s: {int(self.speed_slider.get_value() ** 2)}", True, (255, 255, 255))
+        screen.blit(squared_slider_text, (10, 100))
 
 # Fonction pour passer d'un menu à un autre
 def switch_to_menu(new_menu):
@@ -381,6 +390,7 @@ while running:
 
     # Afficher le menu actuellement visible
     x, y = pygame.mouse.get_pos()
+    x, y = pygame.mouse.get_pos()
     dx = (x - WIDTH / 2) / 10
     dy = (y - HEIGHT / 2) / 10
     zoom = 1.1
@@ -396,40 +406,12 @@ while running:
         current_menu.particle_emitter.update()
         current_menu.particle_emitter.draw()
 
-    # Dessiner le viewport
-    if isinstance(current_menu, ConwayMenu):
-        current_menu.draw_viewport(screen, current_menu.viewport_rect)
-
-        # Dessiner le contenu à côté du viewport
-        # Vous pouvez ajouter du code ici pour dessiner ce que vous voulez à côté du viewport
-        # Par exemple, pour afficher le nom du preset actuellement sélectionné :
-        preset_text = font.render(f"Preset: {current_menu.selected_preset_name}", True, (255, 255, 255))
-        screen.blit(preset_text, (10, 50))  # Ajustez la position du texte selon vos préférences
-
-        # Dessiner les boutons du preset sélectionné
-        for button in current_menu.preset_buttons:
-            button.draw(screen)
-
-    # Dessiner les boutons
-    for button in current_menu.buttons:
-        button.draw(screen)
+    # Dessiner le menu actuellement visible en appelant la méthode draw appropriée
+    current_menu.draw()
 
     # Afficher les FPS en haut à gauche
     fps_text = font.render(f"FPS: {fps}", True, (255, 255, 255))
     screen.blit(fps_text, (10, 10))
-
-    # Afficher le nom du preset actuellement sélectionné
-    if isinstance(current_menu, ConwayMenu) and current_menu.selected_preset:
-        preset_text = font.render(f"Preset: {current_menu.selected_preset_name}", True, (255, 255, 255))
-        screen.blit(preset_text, (10, 50))  # Ajustez la position du texte selon vos préférences
-
-    # Dessiner les boutons du menu
-    for button in current_menu.buttons:
-        button.draw(screen)
-
-    # Dessiner l'aperçu du preset sélectionné
-    if isinstance(current_menu, ConwayMenu) and current_menu.selected_preset:
-        current_menu.draw_preset_preview()
 
     # Dessiner l'effet de fondu
     if alpha > 0:

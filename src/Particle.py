@@ -7,10 +7,9 @@ from src.Config import *
 
 
 class ParticleEmitter:
-    def __init__(self, screen, particle_type, num_particles, particle_color1, particle_color2, particle_size,
+    def __init__(self, screen, num_particles, particle_color1, particle_color2, particle_size,
                  particle_speed):
         self.screen = screen
-        self.particle_type = particle_type
         self.num_particles = num_particles
         self.particle_color1 = particle_color1
         self.particle_color2 = particle_color2
